@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Court Notes">
+<title>Court Session Notes</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-512.png">
+<link rel="manifest" href="manifest.json">
+<script src="jspdf.umd.min.js"></script>
+<style>
+:root{
+  --ink:#1c1e22; --muted:#6a707a; --line:#dcdfe4; --bg:#f2f3f6; --card:#fff; --side:#fafbfc;
+  --accent:#1f4e79; --accent-soft:#e7eef6; --juv:#8a5313; --juv-soft:#f9efe1; --ok:#2f7d4f; --danger:#a12622;
+  --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom); --sal:env(safe-area-inset-left); --sar:env(safe-area-inset-right);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);overscroll-behavior:none;
+  font:17px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+button{font:inherit;cursor:pointer;color:inherit}
+
+/* ---------- App shell ---------- */
+.app{display:grid;grid-template-columns:320px 1fr;grid-template-rows:auto 1fr;height:100vh;height:100dvh}
+.top{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:calc(10px + var(--sat)) calc(16px + var(--sar)) 10px calc(16px + var(--sal));
+  background:#fff;border-bottom:1px solid var(--line);z-index:3}
+.top h1{font-size:19px;font-weight:650;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{font-size:13px;color:var(--muted);white-space:nowrap}
+.status::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+.status.busy::before{background:#c9a227}
+.tbtn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;min-height:44px;font-weight:600;font-size:16px;display:inline-flex;align-items:center;gap:7px}
+.tbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.tbtn svg{width:19px;height:19px}
+.menu-btn{display:none}
+.drawer-scrim{display:none}
+.side{grid-column:1;grid-row:2}
+.main{grid-column:2;grid-row:2}
+
+/* ---------- Sidebar ---------- */
+.side{background:var(--side);border-right:1px solid var(--line);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 10px calc(20px + var(--sab)) calc(10px + var(--sal))}
+.nav{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:transparent;border-radius:10px;padding:11px 12px;min-height:48px;font-size:16px}
+.nav:hover{background:#eef0f3}
+.nav.on{background:var(--accent);color:#fff}
+.nav .sub{display:block;font-size:13px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav.on .sub{color:#d7e3f0}
+.nav .txt{flex:1;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;border:2px solid #b9bec6;flex:none}
+.dot.done{background:var(--ok);border-color:var(--ok)}
+.dot.part{background:#fff;border-color:var(--ok)}
+.nav.on .dot{border-color:#fff}
+.nav.on .dot.done{background:#fff}
+.tag{font-size:11px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:999px;background:var(--juv-soft);color:var(--juv);flex:none}
+.nav.on .tag{background:rgba(255,255,255,.2);color:#fff}
+.side h3{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:18px 12px 6px;font-weight:700}
+.countrow{display:flex;align-items:center;gap:8px;margin:4px 6px 8px}
+.countrow select{flex:1}
+.add{width:calc(100% - 12px);margin:6px;border:1.5px dashed #b9c4d2;background:#fff;color:var(--accent);border-radius:10px;min-height:46px;font-weight:600}
+
+/* ---------- Main ---------- */
+.main{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:22px calc(28px + var(--sar)) calc(110px + var(--sab)) 28px}
+.page{max-width:820px;margin:0 auto}
+.ph{display:flex;align-items:center;gap:12px;margin:0 0 16px}
+.ph h2{font-size:26px;margin:0;flex:1;letter-spacing:-.01em}
+.case.juv .ph h2{color:var(--juv)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+.sect{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.pair{display:grid;grid-template-columns:1.35fr 1fr;gap:12px 16px;margin-bottom:12px}
+.pair:last-child{margin-bottom:0}
+.full{grid-column:1/-1}
+label{display:block;font-size:14px;font-weight:600;color:var(--muted);margin-bottom:5px}
+input,select,textarea{width:100%;font:inherit;font-size:18px;color:var(--ink);background:#fff;border:1px solid #cfd3d9;border-radius:10px;
+  padding:11px 13px;min-height:50px;-webkit-appearance:none;appearance:none}
+select{background-image:linear-gradient(45deg,transparent 50%,#7a808a 50%),linear-gradient(135deg,#7a808a 50%,transparent 50%);
+  background-position:calc(100% - 20px) 22px,calc(100% - 14px) 22px;background-size:6px 6px;background-repeat:no-repeat;padding-right:36px}
+select.empty{color:#9aa0a8}
+textarea{resize:vertical;line-height:1.5}
+textarea.notes{min-height:260px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.toggle{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 14px;min-height:44px;cursor:pointer;user-select:none}
+.toggle input{width:22px;height:22px;min-height:0;padding:0;margin:0;-webkit-appearance:checkbox;appearance:auto;accent-color:var(--juv)}
+.pager{position:fixed;right:calc(24px + var(--sar));bottom:calc(20px + var(--sab));display:flex;gap:10px;z-index:4}
+.pager button{min-height:52px;min-width:52px;border-radius:14px;border:1px solid var(--line);background:#fff;font-weight:650;font-size:16px;padding:0 18px;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.pager button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pager button:disabled{opacity:.4}
+.list .row{display:flex;align-items:center;gap:12px;padding:14px 4px;border-bottom:1px solid var(--line)}
+.list .row:last-child{border-bottom:0}
+.list .row .txt{flex:1;min-width:0}
+.list .row .t{font-weight:650}
+.list .row .s{font-size:14px;color:var(--muted)}
+.list .row button{min-height:44px}
+.empty-note{color:var(--muted);text-align:center;padding:30px 10px}
+.hint{font-size:14px;color:var(--muted);margin:8px 2px 0}
+
+/* ---------- Sheets / dialogs ---------- */
+.scrim{position:fixed;inset:0;background:rgba(18,20,24,.42);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+.scrim.open{display:flex}
+.dlg{background:#fff;border-radius:16px;max-width:460px;width:100%;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.dlg h2{font-size:20px;margin:0 0 8px}
+.dlg p{margin:0 0 16px;color:#444;font-size:16px}
+.dlg .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.dlg .opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;min-height:60px}
+.dlg .opt b{display:block;font-size:17px}
+.dlg .opt span{display:block;font-size:14px;color:var(--muted)}
+.dlg .opt svg{width:26px;height:26px;flex:none;color:var(--accent)}
+.dlg input{margin-bottom:14px}
+.toast{position:fixed;left:50%;bottom:calc(24px + var(--sab));transform:translateX(-50%) translateY(20px);background:#1c1e22;color:#fff;padding:12px 18px;border-radius:12px;
+  font-size:15px;opacity:0;transition:.25s;z-index:30;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- Portrait / narrow: sidebar becomes a drawer ---------- */
+@media (max-width:980px){
+  .app{grid-template-columns:1fr}
+  .main{grid-column:1}
+  .menu-btn{display:inline-flex}
+  .side{position:fixed;top:0;bottom:0;left:0;width:min(340px,86vw);z-index:15;transform:translateX(-102%);transition:transform .22s;
+    padding-top:calc(16px + var(--sat))}
+  .side.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.2)}
+  .drawer-scrim{position:fixed;inset:0;background:rgba(18,20,24,.3);z-index:14;display:none}
+  .drawer-scrim.open{display:block}
+  .main{padding:18px 18px calc(110px + var(--sab))}
+  .hide-narrow{display:none}
+}
+@media (max-width:600px){ .grid,.pair{grid-template-columns:1fr} .top .lbl{display:none} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="tbtn menu-btn" id="btn-menu" aria-label="Show cases">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="lbl">Cases</span></button>
+    <h1 id="top-title">Court Session Notes</h1>
+    <span class="status hide-narrow" id="status">Saved on this iPad</span>
+    <button class="tbtn" id="btn-new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">New day</span></button>
+    <button class="tbtn primary" id="btn-share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg><span class="lbl">Share</span></button>
+  </header>
+
+  <nav class="side" id="side"></nav>
+  <div class="drawer-scrim" id="dscrim"></div>
+  <main class="main" id="main"></main>
+</div>
+
+<div class="pager" id="pager"></div>
+
+<div class="scrim" id="scrim"><div class="dlg" id="dlg"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+const MAX = 60;
+const COURTS = ["EFJC","NJDC I","NJDC II","TJC","4JDC 1","4JDC 2","4JDC 3","Carlin JC","East Line JC","Elko JC A","Elko JC B","Wells JC","Elko Juvenile Court","6JDC","Union JC","11JDC Lander","Argenta JC","11JDC Pershing","Lake Township"];
+const TIMES = []; for(let h=7;h<=17;h++){for(const m of [0,30]){ if(h===17&&m) break; const hh=h>12?h-12:h; TIMES.push(hh+":"+(m?"30":"00")+" "+(h<12?"a.m.":"p.m."));}}
+const PRESENT = ["Present in person","Video (jail)","Video (other)","Not present"];
+const CUSTODY = ["In","Out"];
+const HEARINGS = ["48-Hour Hearing","Arraignment","Bail Hearing","Bench Trial","Bench Warrant Return","Jury Trial","Motion","Order to Show Cause","Post Sentencing Review Hearing","Pre-Preliminary Hearing","Preliminary Hearing","Pretrial Conference","Probation Violation","Review Hearing","Sentencing","Status Hearing","Violation of Bail Conditions"];
+const KEY = "court-notes-v2", KEY_V1 = "court-notes-v1";
+const CASE_KEYS = ["defAtty","defPres","client","clientPres","pros","prosPres","custody","caseNo","hearing","notes","cont","next"];
+
+/* ================= State ================= */
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const blankCase = () => ({juv:false,defAtty:"",defPres:"",client:"",clientPres:"",pros:"",prosPres:"",custody:"",caseNo:"",hearing:"",notes:"",cont:"",next:""});
+const blankDay = (court) => ({id:uid(),created:Date.now(),updated:Date.now(),header:{court:court||"",judge:"",date:todayStr(),time:"",dda:"",defense:""},count:1,cases:[blankCase()]});
+function todayStr(){ const d=new Date(); return String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"-"+d.getFullYear(); }
+function normDay(s){
+  const d = blankDay();
+  if(!s || typeof s!=="object") return d;
+  d.id = s.id || uid(); d.created = +s.created || Date.now(); d.updated = +s.updated || 0;
+  d.header = Object.assign(d.header, s.header||{});
+  if(!s.header) d.header.date = "";
+  d.count = Math.min(MAX, Math.max(1, +s.count||1));
+  d.cases = Array.from({length:d.count}, (_,i)=>Object.assign(blankCase(), (s.cases||[])[i]||{}));
+  return d;
+}
+function dayHasContent(d){
+  const h=d.header; if(h.judge||h.time||h.dda||h.defense) return true;
+  return d.cases.some(c=>CASE_KEYS.some(k=>c[k]));
+}
+function dayTitle(d){ return [d.header.date||new Date(d.created).toLocaleDateString(), d.header.court].filter(Boolean).join(" · "); }
+
+let store = {current:null, archive:[]};
+(function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(KEY)||"null");
+    if(s && s.current){ store.current = normDay(s.current); store.archive = (s.archive||[]).map(normDay); return; }
+    const old = JSON.parse(localStorage.getItem(KEY_V1)||"null");
+    if(old && old.cases){ old.cases = (old.cases||[]).slice(0, +old.count||1); store.current = normDay(old); }
+  }catch(e){}
+  if(!store.current) store.current = blankDay();
+})();
+let day = store.current;
+let view = {kind:"session"}; // session | case(i) | history
+
+/* ================= Helpers ================= */
+const $ = (id)=>document.getElementById(id);
+const el = (tag, props={}, ...kids)=>{ const n=document.createElement(tag); for(const [k,v] of Object.entries(props)){ if(k==="class") n.className=v; else if(k.startsWith("on")) n.addEventListener(k.slice(2),v); else if(k==="text") n.textContent=v; else if(v!==undefined&&v!==null&&v!==false) n.setAttribute(k,v===true?"":v); } kids.flat().forEach(c=>c!=null&&n.append(c)); return n; };
+function sel(opts, value, ph, onChange){
+  const s = el("select");
+  s.append(el("option",{value:"",text:ph||"Select…"}));
+  opts.forEach(o=>s.append(el("option",{value:o,text:o})));
+  if(value && !opts.includes(value)) s.append(el("option",{value,text:value}));
+  s.value = value||""; s.classList.toggle("empty",!s.value);
+  s.addEventListener("change",()=>{ s.classList.toggle("empty",!s.value); onChange(s.value); });
+  return s;
+}
+function txt(value, onInput, opts={}){
+  const n = el(opts.area?"textarea":"input",{autocomplete:"off",autocorrect:"off",spellcheck:"false",autocapitalize:opts.cap||"words",rows:opts.rows,class:opts.cls});
+  if(!opts.area) n.type="text";
+  n.value = value||""; n.addEventListener("input",()=>onInput(n.value)); return n;
+}
+const field = (label, input, cls)=>el("div",{class:cls},el("label",{text:label}),input);
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2600); }
+function caseLabel(d, i){ let a=0,j=0; for(let k=0;k<=i;k++){ d.cases[k].juv ? j++ : a++; } return d.cases[i].juv ? "Juvenile – Case "+j : "Case "+a; }
+function caseState(c){ const n=["defAtty","client","caseNo","hearing","notes"].filter(k=>c[k]).length; return n===0?"":n>=4?"done":"part"; }
+
+/* ================= Rendering ================= */
+function renderSide(){
+  const s=$("side"); s.innerHTML="";
+  const go=(v)=>()=>{ view=v; closeDrawer(); render(); $("main").scrollTop=0; };
+  s.append(el("button",{class:"nav"+(view.kind==="session"?" on":""),onclick:go({kind:"session"})},
+    el("span",{class:"txt"},"Session details",el("span",{class:"sub",text:dayTitle(day)||"Court, judge, date…"}))));
+  s.append(el("h3",{text:"Cases"}));
+  const cnt = el("select");
+  for(let i=1;i<=MAX;i++) cnt.append(el("option",{value:i,text:i+(i===1?" case today":" cases today")}));
+  cnt.value=day.count; cnt.addEventListener("change",()=>setCount(+cnt.value));
+  s.append(el("div",{class:"countrow"},cnt));
+  day.cases.forEach((c,i)=>{
+    const st=caseState(c);
+    const sub=[c.caseNo,c.client,c.hearing].filter(Boolean).join(" · ")||"Not started";
+    s.append(el("button",{class:"nav"+(view.kind==="case"&&view.i===i?" on":""),onclick:go({kind:"case",i})},
+      el("span",{class:"dot "+st}),
+      el("span",{class:"txt"},caseLabel(day,i).replace("Juvenile – ",""),el("span",{class:"sub",text:sub})),
+      c.juv?el("span",{class:"tag",text:"JUV"}):null));
+  });
+  if(day.count<MAX) s.append(el("button",{class:"add",onclick:()=>{ setCount(day.count+1); view={kind:"case",i:day.count-1}; render(); }},"+ Add case"));
+  s.append(el("h3",{text:"Saved days"}));
+  s.append(el("button",{class:"nav"+(view.kind==="history"?" on":""),onclick:go({kind:"history"})},
+    el("span",{class:"txt"},"Past days",el("span",{class:"sub",text:store.archive.length?store.archive.length+" saved":"None yet"}))));
+}
+
+function renderSession(m){
+  const h=day.header, up=(k)=>(v)=>{ h[k]=v; changed(); renderSideSoon(); };
+  m.append(el("div",{class:"ph"},el("h2",{text:"Session details"})));
+  m.append(el("div",{class:"card"},el("div",{class:"grid"},
+    field("Court", sel(COURTS,h.court,"Select court…",up("court"))),
+    field("Judge", txt(h.judge,up("judge"))),
+    field("Date", txt(h.date,up("date"),{cap:"none"})),
+    field("Time", sel(TIMES,h.time,"Select time…",up("time"))),
+    field("DDA", txt(h.dda,up("dda"),{area:true,rows:2}),"full"),
+    field("Defense", txt(h.defense,up("defense"),{area:true,rows:2}),"full"))));
+  m.append(el("p",{class:"hint",text:"Tip: tap a case in the list, or use Next to move through them. Everything saves as you go."}));
+}
+
+function renderCase(m, i){
+  const c=day.cases[i], up=(k)=>(v)=>{ c[k]=v; changed(); renderSideSoon(); };
+  const page=el("div",{class:"case"+(c.juv?" juv":"")});
+  const tg=el("label",{class:"toggle"}); const cb=el("input",{type:"checkbox"}); cb.checked=!!c.juv;
+  cb.addEventListener("change",()=>{ c.juv=cb.checked; changed(); render(); }); tg.append(cb,"Juvenile");
+  page.append(el("div",{class:"ph"},el("h2",{text:caseLabel(day,i)}),tg));
+  const people=el("div",{class:"card"},el("div",{class:"sect",text:"People"}));
+  [["defAtty","Defense Attorney","defPres"],["client",c.juv?"Juvenile Client":"Client","clientPres"],["pros","Prosecutor","prosPres"]].forEach(([k,l,p])=>{
+    people.append(el("div",{class:"pair"},field(l,txt(c[k],up(k))),field("Present?",sel(PRESENT,c[p],"Select…",up(p)))));
+  });
+  page.append(people);
+  page.append(el("div",{class:"card"},el("div",{class:"sect",text:"Case"}),el("div",{class:"grid"},
+    field("Case Number",txt(c.caseNo,up("caseNo"),{cap:"characters"})),
+    field("Custody Status",sel(CUSTODY,c.custody,"Select…",up("custody"))),
+    field("Hearing",sel(HEARINGS,c.hearing,"Select hearing…",up("hearing")),"full"))));
+  page.append(el("div",{class:"card"},el("div",{class:"sect",text:"Notes"}),
+    txt(c.notes,up("notes"),{area:true,cap:"sentences",cls:"notes"})));
+  page.append(el("div",{class:"card"},el("div",{class:"grid"},
+    field("Continuance?",txt(c.cont,up("cont"),{cap:"sentences"})),
+    field("Next Hearing",txt(c.next,up("next"),{cap:"sentences"})))));
+  m.append(page);
+}
+
+function renderHistory(m){
+  m.append(el("div",{class:"ph"},el("h2",{text:"Past days"})));
+  const card=el("div",{class:"card list"});
+  if(!store.archive.length) card.append(el("div",{class:"empty-note",text:"Days you finish with New day are saved here."}));
+  [...store.archive].sort((a,b)=>b.created-a.created).forEach(d=>{
+    const n=d.cases.length;
+    card.append(el("div",{class:"row"},
+      el("div",{class:"txt"},el("div",{class:"t",text:dayTitle(d)}),el("div",{class:"s",text:n+(n===1?" case":" cases")+" · saved "+new Date(d.updated||d.created).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})})),
+      el("button",{class:"tbtn",onclick:()=>openShare(d)},"Share"),
+      el("button",{class:"tbtn",onclick:()=>reopen(d)},"Open"),
+      el("button",{class:"tbtn",style:"color:var(--danger)",onclick:()=>removeDay(d)},"Delete")));
+  });
+  m.append(card);
+}
+
+function renderPager(){
+  const p=$("pager"); p.innerHTML="";
+  if(view.kind==="history") return;
+  const pos = view.kind==="session" ? -1 : view.i;
+  const prev=el("button",{"aria-label":"Previous"},"‹ Prev"); prev.disabled = pos<0;
+  prev.onclick=()=>{ view = pos<=0?{kind:"session"}:{kind:"case",i:pos-1}; render(); $("main").scrollTop=0; };
+  const last = pos>=day.count-1;
+  const next=el("button",{class:"primary"}, last? "+ Add case" : "Next ›");
+  if(last && day.count>=MAX) next.disabled=true;
+  next.onclick=()=>{ if(last) setCount(day.count+1); view={kind:"case",i:pos+1}; render(); $("main").scrollTop=0; };
+  p.append(prev,next);
+}
+
+function render(){
+  if(view.kind==="case" && view.i>=day.count) view={kind:"case",i:day.count-1};
+  const m=$("main"); m.innerHTML=""; const pg=el("div",{class:"page"}); m.append(pg);
+  if(view.kind==="session") renderSession(pg); else if(view.kind==="case") renderCase(pg,view.i); else renderHistory(pg);
+  renderSide(); renderPager();
+  $("top-title").textContent = dayTitle(day) || "Court Session Notes";
+}
+let sideT; function renderSideSoon(){ clearTimeout(sideT); sideT=setTimeout(()=>{ renderSide(); $("top-title").textContent = dayTitle(day)||"Court Session Notes"; },400); }
+
+function setCount(n){
+  n=Math.max(1,Math.min(MAX,n));
+  while(day.cases.length<n) day.cases.push(blankCase());
+  if(n<day.cases.length){
+    const lost=day.cases.slice(n).some(c=>CASE_KEYS.some(k=>c[k]));
+    if(lost){ return confirmDlg("Remove cases?","Cases "+(n+1)+"–"+day.cases.length+" have notes in them. Removing them deletes those notes.","Remove",true).then(ok=>{ if(ok){ day.cases.length=n; day.count=n; changed(); } render(); }); }
+    day.cases.length=n;
+  }
+  day.count=n; changed(); render();
+}
+
+/* drawer (portrait) */
+function closeDrawer(){ $("side").classList.remove("open"); $("dscrim").classList.remove("open"); }
+$("btn-menu").onclick=()=>{ $("side").classList.add("open"); $("dscrim").classList.add("open"); };
+$("dscrim").onclick=closeDrawer;
+
+/* ================= Saving ================= */
+let db=null, base=null, writing={}, again={}, timers={};
+function setStatus(t,busy){ const s=$("status"); s.textContent=t; s.classList.toggle("busy",!!busy); }
+function saveLocal(){ try{ localStorage.setItem(KEY, JSON.stringify({current:day, archive:store.archive})); }catch(e){} }
+function changed(){
+  day.updated=Date.now(); store.current=day; saveLocal();
+  if(base){ setStatus("Saving…",true); queue("cur", ()=>base.current.set(clone(day))); } else setStatus("Saved on this iPad");
+}
+const clone=(o)=>JSON.parse(JSON.stringify(o));
+function queue(key, fn, delay=1200){
+  clearTimeout(timers[key]);
+  timers[key]=setTimeout(async function run(){
+    if(writing[key]){ again[key]=fn; return; }
+    writing[key]=true;
+    try{ await fn(); setStatus("Saved"); }catch(e){ setStatus("Saved"); if(e&&(e.code==="invalid_argument"||e.code==="revoked")) base=null; }
+    writing[key]=false;
+    if(again[key]){ const f=again[key]; again[key]=null; fn=f; run(); }
+  }, delay);
+}
+async function remoteArchive(d){ if(!base) return; try{ await base.days.doc(d.id).set(clone(d)); }catch(e){} }
+async function remoteUnarchive(d){ if(!base) return; try{ await base.days.doc(d.id).delete(); }catch(e){} }
+
+/* ================= Day actions ================= */
+$("btn-new").onclick=async()=>{
+  const has=dayHasContent(day);
+  const ok=await confirmDlg("Start a new day?", has? "Today's notes ("+dayTitle(day)+") will be saved to Past days, and a blank sheet will open." : "This sheet is empty, so a blank sheet will just open.", has?"Save & start new":"Start new");
+  if(!ok) return;
+  if(has){ day.updated=Date.now(); store.archive.push(day); remoteArchive(day); }
+  day=blankDay(day.header.court); store.current=day; changed(); view={kind:"session"}; render();
+  toast(has?"Saved to Past days. New sheet ready.":"New sheet ready.");
+};
+async function reopen(d){
+  const ok=await confirmDlg("Open this day?", "It becomes your working sheet again."+(dayHasContent(day)?" The sheet you have open now will be saved to Past days.":""), "Open");
+  if(!ok) return;
+  if(dayHasContent(day)){ day.updated=Date.now(); store.archive.push(day); remoteArchive(day); }
+  store.archive=store.archive.filter(x=>x.id!==d.id); remoteUnarchive(d);
+  day=d; store.current=d; changed(); view={kind:"session"}; render(); toast("Opened "+dayTitle(d)+".");
+}
+async function removeDay(d){
+  const ok=await confirmDlg("Delete this day?", dayTitle(d)+" will be deleted for good. Share it as a PDF first if you need a copy.","Delete",true);
+  if(!ok) return;
+  store.archive=store.archive.filter(x=>x.id!==d.id); saveLocal(); remoteUnarchive(d); render(); toast("Deleted.");
+}
+
+/* ================= Dialogs ================= */
+function openDlg(build){ const s=$("scrim"), d=$("dlg"); d.innerHTML=""; build(d); s.classList.add("open"); }
+function closeDlg(){ $("scrim").classList.remove("open"); }
+$("scrim").addEventListener("click",e=>{ if(e.target.id==="scrim"){ closeDlg(); if(closeDlg.cb) closeDlg.cb(false); } });
+function confirmDlg(title,text,okLabel,danger){
+  return new Promise(res=>{
+    closeDlg.cb=res;
+    openDlg(d=>{
+      d.append(el("h2",{text:title}),el("p",{text:text}));
+      const ok=el("button",{class:"tbtn primary",style:danger?"background:var(--danger);border-color:var(--danger)":""},okLabel||"OK");
+      const no=el("button",{class:"tbtn"},"Cancel");
+      ok.onclick=()=>{ closeDlg(); closeDlg.cb=null; res(true); }; no.onclick=()=>{ closeDlg(); closeDlg.cb=null; res(false); };
+      d.append(el("div",{class:"row"},no,ok));
+    });
+  });
+}
+function info(title,text){ return confirmDlg(title,text,"OK").then(()=>{}); }
+
+/* ================= Share ================= */
+const ICON = {
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
+  pdf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+  copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>'
+};
+function opt(icon, title, sub, onclick){ const b=el("button",{class:"opt",onclick}); b.innerHTML=ICON[icon]; b.append(el("div",{},el("b",{text:title}),el("span",{text:sub}))); return b; }
+$("btn-share").onclick=()=>openShare(day);
+function openShare(d){
+  openDlg(box=>{
+    box.append(el("h2",{text:"Share "+(dayTitle(d)||"today")}));
+    box.append(opt("pdf","Share PDF","Opens the share sheet. Tap Mail to email it as an attachment, or Save to Files.",()=>{ closeDlg(); sharePdf(d); }));
+    box.append(opt("mail","Email as text","Starts an email with the notes typed out in the message.",()=>{ closeDlg(); emailText(d); }));
+    box.append(opt("copy","Copy as text","Copies the notes so you can paste them anywhere.",()=>{ closeDlg(); copyText(d); }));
+    box.append(el("div",{class:"row"},el("button",{class:"tbtn",onclick:closeDlg},"Cancel")));
+  });
+}
+function fileName(d){ return ["Court Notes", d.header.court, (d.header.date||"").replace(/[\/\\:]/g,"-")].filter(Boolean).join(" ")+".pdf"; }
+async function sharePdf(d){
+  if(!window.jspdf) return info("PDF not ready","The PDF tool didn't load. Close and reopen the app, then try again.");
+  const blob = buildPdf(d).output("blob");
+  const file = new File([blob], fileName(d), {type:"application/pdf"});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:file.name}); }
+    catch(e){ if(e && e.name!=="AbortError") info("Couldn't share","Something went wrong opening the share sheet. Try again."); }
+    return;
+  }
+  const url=URL.createObjectURL(blob); const a=el("a",{href:url,download:file.name}); document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000); toast("PDF saved to your downloads.");
+}
+function asText(d){
+  const h=d.header, L=[];
+  L.push("COURT SESSION SUMMARY", "");
+  L.push("Court: "+(h.court||""), "Judge: "+(h.judge||""), "Date: "+(h.date||""), "Time: "+(h.time||""));
+  if(h.dda) L.push("DDA: "+h.dda); if(h.defense) L.push("Defense: "+h.defense);
+  d.cases.forEach((c,i)=>{
+    L.push("", "— "+caseLabel(d,i).toUpperCase()+" —");
+    const row=(k,v,p)=>{ if(v||p) L.push(k+": "+(v||"")+(p?"  ("+p+")":"")); };
+    row("Defense Attorney",c.defAtty,c.defPres); row(c.juv?"Juvenile Client":"Client",c.client,c.clientPres); row("Prosecutor",c.pros,c.prosPres);
+    if(c.caseNo) L.push("Case Number: "+c.caseNo); if(c.custody) L.push("Custody: "+c.custody); if(c.hearing) L.push("Hearing: "+c.hearing);
+    if(c.notes) L.push("Notes: "+c.notes); if(c.cont) L.push("Continuance: "+c.cont); if(c.next) L.push("Next Hearing: "+c.next);
+  });
+  return L.join("\n");
+}
+function emailText(d){
+  const subject="Court Notes – "+(dayTitle(d)||"");
+  let body=asText(d);
+  const url="mailto:?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  if(url.length>60000){ return info("Too long for an email link","These notes are too long to start an email this way. Use Share PDF and pick Mail instead."); }
+  location.href=url;
+}
+async function copyText(d){
+  try{ await navigator.clipboard.writeText(asText(d)); toast("Copied. Paste it into an email or note."); }
+  catch(e){
+    openDlg(box=>{ const t=el("textarea",{rows:10,readonly:true}); t.value=asText(d);
+      box.append(el("h2",{text:"Copy the notes"}),el("p",{text:"Select all the text below and copy it."}),t,el("div",{class:"row",style:"margin-top:12px"},el("button",{class:"tbtn",onclick:closeDlg},"Done")));
+      setTimeout(()=>{ t.focus(); t.select(); },50); });
+  }
+}
+
+/* ================= PDF (laid out like the paper template) ================= */
+function buildPdf(d){
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({unit:"pt", format:"letter"});
+  const L=72, R=540, RH=20, c1=171, c2=324, c3=398;
+  pdf.setLineWidth(0.6); pdf.setDrawColor(0);
+  const fit=(s,w,size)=>{ pdf.setFontSize(size); let t=String(s||""); while(t && pdf.getTextWidth(t)>w) t=t.slice(0,-1); return t; };
+  const label=(x,y,s,bold)=>{ pdf.setFont("helvetica",bold?"bold":"normal"); pdf.setFontSize(10.5); pdf.text(s,x,y); };
+  const val=(x,y,s,w)=>{ pdf.setFont("helvetica","normal"); pdf.setFontSize(10.5); pdf.text(fit(s,w,10.5),x,y); };
+  const box=(x0,y0,x1,y1,fill)=>{ if(fill){ pdf.setFillColor(191,191,191); pdf.rect(x0,y0,x1-x0,y1-y0,"FD"); } else pdf.rect(x0,y0,x1-x0,y1-y0); };
+  const center=(s,x0,x1,y,bold,size)=>{ pdf.setFont("helvetica",bold?"bold":"normal"); pdf.setFontSize(size||10.5); pdf.text(s,(x0+x1)/2,y,{align:"center"}); };
+  const wrap=(s,w,size)=>{ pdf.setFont("helvetica","normal"); pdf.setFontSize(size); return pdf.splitTextToSize(String(s||""),w); };
+  function table(c, top, notesH){
+    let y=top;
+    [["Defense Attorney",c.defAtty,c.defPres,false],[c.juv?"Juvenile Client":"The client",c.client,c.clientPres,true],["Prosecutor",c.pros,c.prosPres,false]].forEach(([lab,v,p,ind])=>{
+      box(L,y,c1,y+RH); box(c1,y,c2,y+RH); box(c2,y,c3,y+RH); box(c3,y,R,y+RH);
+      if(ind) box(L,y,L+22,y+RH);
+      label(L+(ind?28:6),y+14,lab); label(c2+6,y+14,"Present?");
+      val(c1+5,y+14,v,c2-c1-10); val(c3+5,y+14,p,R-c3-10); y+=RH;
+    });
+    box(L,y,c1,y+RH); box(c1,y,c2,y+RH); box(c2,y,R,y+RH);
+    label(L+6,y+14,"Custody Status"); val(c1+5,y+14,c.custody,c2-c1-10); center("Hearing",c2,R,y+14,true); y+=RH;
+    box(L,y,c1,y+RH); box(c1,y,c2,y+RH); box(c2,y,R,y+RH);
+    label(L+6,y+14,"Case Number"); val(c1+5,y+14,c.caseNo,c2-c1-10); val(c2+5,y+14,c.hearing,R-c2-10); y+=RH;
+    box(L,y,R,y+16); center("Notes",L,R,y+12,true); y+=16;
+    box(L,y,R,y+notesH);
+    let size=10.5, lines=wrap(c.notes,R-L-12,size);
+    while(lines.length*size*1.25>notesH-10 && size>7){ size-=0.5; lines=wrap(c.notes,R-L-12,size); }
+    pdf.setFontSize(size); pdf.text(lines,L+6,y+6+size,{lineHeightFactor:1.25});
+    y+=notesH;
+    box(L,y,c1,y+RH); box(c1,y,c2,y+RH); box(c2,y,c3,y+RH); box(c3,y,R,y+RH);
+    label(L+6,y+14,"Continuance?"); val(c1+5,y+14,c.cont,c2-c1-10); label(c2+6,y+14,"Next Hearing"); val(c3+5,y+14,c.next,R-c3-10); y+=RH;
+    box(L,y,R,y+12,true);
+  }
+  const h=d.header;
+  d.cases.forEach((c,i)=>{
+    if(i>0) pdf.addPage();
+    if(i===0){
+      center("Court Session Summary Review Sheet",L,R,92,false,20);
+      const row=(y,a,av,b,bv)=>{ label(L,y,a); val(L+40,y,av,200); label(324,y,b); val(362,y,bv,R-362); };
+      row(124,"Court:",h.court,"Judge:",h.judge); row(150,"Date:",h.date,"Time:",h.time);
+      label(L,176,"DDA:"); pdf.setFontSize(10.5); pdf.text(wrap(h.dda,R-140,10.5).slice(0,2),140,176,{lineHeightFactor:1.3});
+      label(L,216,"Defense:"); pdf.text(wrap(h.defense,R-140,10.5).slice(0,2),140,216,{lineHeightFactor:1.3});
+      table(c,252,270);
+    } else { center(caseLabel(d,i),L,R,92,false,20); table(c,120,420); }
+  });
+  return pdf;
+}
+
+render();
+if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
+})();
+</script>
+</body>
+</html>
